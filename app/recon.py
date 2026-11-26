@@ -1,4 +1,5 @@
 """The reconciliation itself: compare the ledger with the bank statement and record what doesn't match."""
+import json
 import random
 import socket
 import string
@@ -24,7 +25,13 @@ def add_sample(n: int = 40) -> int:
     return n
 
 
-def run(trigger: str) -> ReconRun:
+def metric(**values):
+    """One `ops-metric {json}` line: the Ops Console shows the latest on the Workers & jobs tab (processed/total as a bar)."""
+    print("ops-metric " + json.dumps(values), flush=True)
+
+
+def run(trigger: str, label: str | None = None, extra: dict | None = None) -> ReconRun:
+    """Reconcile every payment, reporting progress as it goes (label: what the console shows, e.g. "Recon task #7")."""
     started = time.monotonic()
     with Session() as s:
         r = ReconRun(trigger=trigger, host=socket.gethostname())
@@ -33,7 +40,12 @@ def run(trigger: str) -> ReconRun:
         ledger, bank = {}, {}
         for t in s.query(Transaction).all():
             (ledger if t.source == "ledger" else bank)[t.reference] = t.amount
-        for ref in sorted(set(ledger) | set(bank)):
+        refs = sorted(set(ledger) | set(bank))
+        label = label or f"Recon run #{r.id} ({trigger})"
+        for i, ref in enumerate(refs, 1):
+            if i == 1 or i % 10 == 0 or i == len(refs):
+                metric(label=label, processed=i, total=len(refs), **(extra or {}))
+            time.sleep(0.04)   # a little time per payment, so the progress can be watched
             a, b = ledger.get(ref), bank.get(ref)
             if a is not None and b is not None and a == b:
                 r.matched += 1
@@ -44,7 +56,6 @@ def run(trigger: str) -> ReconRun:
             else:
                 r.missing += 1
             s.add(ReconItem(run_id=r.id, reference=ref, problem=problem, ledger_amount=a, bank_amount=b))
-        time.sleep(min(3.0, 0.5 + len(ledger) / 400))  # so a run takes visibly long enough to watch
         r.finished_at = now()
         s.commit()
         print(f"recon #{r.id} ({trigger}): {r.matched} matched, {r.mismatched} amounts differ, {r.missing} missing, {time.monotonic() - started:.1f}s", flush=True)

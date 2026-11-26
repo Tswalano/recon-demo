@@ -55,7 +55,18 @@ App page → **Workers & jobs** → **Add**:
 **Add and schedule**, then **Run now** to see a run tagged **schedule** straight away. The Workers & jobs tab shows
 the job's last result and next run; the page shows "Last scheduled run".
 
-### 4. Things to try
+### 4. Watch it in the Ops Console
+On the app's **Workers & jobs** tab (it refreshes every 5 seconds):
+- the worker's row shows its progress while it works, e.g. **Running · 20/30**;
+- click a name to open it: what it reports (**Recon task #7**, a progress bar *processed / total*, tasks done / failed,
+  the queue) and its run history (for the job: when each run started, how long it took, succeeded or failed).
+
+The app reports through one convention any worker or job can use: print a line starting with `ops-metric ` and a JSON
+object, e.g. `ops-metric {"label": "Recon task #7", "processed": 20, "total": 30, "tasks_done": 4}`. The console shows
+the latest one: `processed` / `total` as a progress bar, `label` as its title, any other numbers or short texts as
+figures. See `metric()` in `app/recon.py`.
+
+### 5. Things to try
 - **Stop and start the server**: the worker comes back with it, and a missed nightly run happens when it starts.
 - **Deploy** a change: the worker is restarted with the new code (the job uses it on its next run).
 - **Remove the worker** in Workers & jobs: the page shows it as not running after 20 seconds, and queued recons wait.
