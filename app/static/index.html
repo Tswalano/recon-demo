@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Recon demo</title>
+<style>
+  :root { --bg: #0f141b; --card: #161d26; --line: #263241; --text: #e6edf3; --muted: #8b98a8; --ok: #3fb68b; --warn: #e3a23b; --bad: #e5534b; --accent: #6d8cff; }
+  @media (prefers-color-scheme: light) { :root { --bg: #f5f7fa; --card: #fff; --line: #dde3ea; --text: #17202b; --muted: #5d6b7c; } }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 14px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  main { max-width: 1080px; margin: 0 auto; padding: 24px 16px 48px; }
+  h1 { font-size: 22px; margin: 0 0 4px; } h2 { font-size: 15px; margin: 0 0 12px; }
+  .muted { color: var(--muted); } .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; }
+  .grid { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); margin: 20px 0; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 16px; }
+  .big { font-size: 26px; font-weight: 600; } .dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 6px; }
+  .ok { color: var(--ok); } .warn { color: var(--warn); } .bad { color: var(--bad); }
+  button { background: var(--accent); color: #fff; border: 0; border-radius: 8px; padding: 8px 14px; font: inherit; cursor: pointer; }
+  button.ghost { background: transparent; color: var(--text); border: 1px solid var(--line); }
+  button:disabled { opacity: .6; cursor: default; }
+  .actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 4px; }
+  table { width: 100%; border-collapse: collapse; } th, td { text-align: left; padding: 8px 10px; border-top: 1px solid var(--line); }
+  th { color: var(--muted); font-weight: 500; font-size: 12px; text-transform: uppercase; letter-spacing: .04em; border-top: 0; }
+  tbody tr { cursor: pointer; } tbody tr:hover, tbody tr.sel { background: rgba(109, 140, 255, .08); }
+  .pill { border: 1px solid var(--line); border-radius: 999px; padding: 1px 8px; font-size: 12px; }
+  .pill.schedule { border-color: var(--accent); color: var(--accent); } .pill.worker { border-color: var(--ok); color: var(--ok); }
+  .scroll { overflow-x: auto; } #flash { min-height: 20px; margin-top: 8px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Recon demo</h1>
+  <p class="muted">Reconciles our ledger against the bank statement. Runs come from three places: the <b>scheduled job</b>, the <b>worker</b> (picking up queued recons), and the button here. Refreshes every 3 seconds.</p>
+
+  <div class="grid">
+    <div class="card"><h2>Worker</h2><div id="worker" class="big">…</div><div id="workerMeta" class="muted"></div></div>
+    <div class="card"><h2>Queue</h2><div id="queue" class="big">…</div><div class="muted">recons waiting for the worker</div></div>
+    <div class="card"><h2>Last scheduled run</h2><div id="sched" class="big">…</div><div class="muted">from the scheduled job</div></div>
+    <div class="card"><h2>Payments</h2><div id="tx" class="big">…</div><div class="muted">ledger + bank lines</div></div>
+  </div>
+
+  <div class="card">
+    <h2>Try it</h2>
+    <div class="actions">
+      <button id="queueBtn">Queue a recon for the worker</button>
+      <button id="sampleBtn" class="ghost">Add sample payments</button>
+      <button id="runBtn" class="ghost">Run a recon here (web process)</button>
+    </div>
+    <div id="flash" class="muted"></div>
+  </div>
+
+  <div class="card" style="margin-top:16px">
+    <h2>Recon runs</h2>
+    <div class="scroll"><table>
+      <thead><tr><th>#</th><th>Started</th><th>Triggered by</th><th>Matched</th><th>Amounts differ</th><th>Missing</th><th>Took</th></tr></thead>
+      <tbody id="runs"><tr><td colspan="7" class="muted">No runs yet.</td></tr></tbody>
+    </table></div>
+  </div>
+
+  <div class="card" style="margin-top:16px">
+    <h2 id="itemsTitle">Problems found</h2>
+    <div class="scroll"><table>
+      <thead><tr><th>Reference</th><th>Problem</th><th>Ledger</th><th>Bank</th></tr></thead>
+      <tbody id="items"><tr><td colspan="4" class="muted">Click a run to see what it found.</td></tr></tbody>
+    </table></div>
+  </div>
+</main>
+<script>
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const ago = (t) => { if (!t) return 'never'; const s = Math.max(0, Math.round((Date.now() - Date.parse(t)) / 1000)); return s < 60 ? `${s}s ago` : s < 3600 ? `${Math.round(s / 60)} min ago` : `${Math.round(s / 3600)}h ago`; };
+const when = (t) => (t ? new Date(t).toLocaleString(undefined, { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', second: '2-digit' }) : '—');
+const PROBLEM = { amount_differs: 'Amount differs', missing_in_bank: 'Missing at the bank', missing_in_ledger: 'Missing in the ledger' };
+let selected = null;
+
+async function refresh() {
+  try {
+    const r = await (await fetch('/api/status')).json();
+    const w = r.worker;
+    $('worker').innerHTML = `<span class="dot" style="background:var(--${w.alive ? 'ok' : 'bad'})"></span><span class="${w.alive ? 'ok' : 'bad'}">${w.alive ? 'Running' : 'Not running'}</span>`;
+    $('workerMeta').textContent = w.lastBeat ? `last heartbeat ${ago(w.lastBeat)} · ${w.processed} recons handled${w.pid ? ` · pid ${w.pid}` : ''}` : 'no heartbeat yet: is the worker added?';
+    $('queue').innerHTML = `${r.queue.queued}${r.queue.running ? ` <span class="muted" style="font-size:14px">(+${r.queue.running} running)</span>` : ''}`;
+    $('sched').textContent = r.lastScheduled ? ago(r.lastScheduled) : 'none yet';
+    $('tx').textContent = r.transactions;
+    $('runs').innerHTML = r.runs.length ? r.runs.map((x) => {
+      const took = x.finishedAt ? `${((Date.parse(x.finishedAt) - Date.parse(x.startedAt)) / 1000).toFixed(1)}s` : 'running…';
+      return `<tr data-id="${x.id}" class="${x.id === selected ? 'sel' : ''}"><td>${x.id}</td><td>${esc(when(x.startedAt))}</td><td><span class="pill ${esc(x.trigger)}">${esc(x.trigger)}</span></td>
+        <td class="ok">${x.matched}</td><td class="${x.mismatched ? 'warn' : ''}">${x.mismatched}</td><td class="${x.missing ? 'bad' : ''}">${x.missing}</td><td>${took}</td></tr>`;
+    }).join('') : '<tr><td colspan="7" class="muted">No runs yet: queue one, or wait for the schedule.</td></tr>';
+    for (const tr of document.querySelectorAll('#runs tr[data-id]')) tr.onclick = () => show(Number(tr.dataset.id));
+  } catch { $('flash').textContent = 'Could not reach the app.'; }
+}
+
+async function show(id) {
+  selected = id;
+  const items = await (await fetch(`/api/runs/${id}`)).json();
+  $('itemsTitle').textContent = `Problems found by run #${id}`;
+  $('items').innerHTML = items.length ? items.map((i) => `<tr><td class="mono">${esc(i.reference)}</td><td>${PROBLEM[i.problem] ?? esc(i.problem)}</td><td>${esc(i.ledger ?? '—')}</td><td>${esc(i.bank ?? '—')}</td></tr>`).join('')
+    : '<tr><td colspan="4" class="muted">Everything matched.</td></tr>';
+  refresh();
+}
+
+async function act(btn, url, done) {
+  btn.disabled = true;
+  try { const r = await (await fetch(url, { method: 'POST' })).json(); $('flash').textContent = done(r); } catch { $('flash').textContent = 'That did not work.'; }
+  btn.disabled = false; refresh();
+}
+$('queueBtn').onclick = (e) => act(e.target, '/api/queue', (r) => `Queued #${r.queued}: the worker picks it up within 5 seconds (if it's running).`);
+$('sampleBtn').onclick = (e) => act(e.target, '/api/sample', (r) => `Added ${r.added} payments.`);
+$('runBtn').onclick = (e) => act(e.target, '/api/run-now', (r) => `Run #${r.run} done in the web process.`);
+refresh(); setInterval(refresh, 3000);
+</script>
+</body>
+</html>
