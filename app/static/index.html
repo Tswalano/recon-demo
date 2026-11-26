@@ -6,64 +6,113 @@
 <title>Recon demo</title>
 <style>
   :root { --bg: #0f141b; --card: #161d26; --line: #263241; --text: #e6edf3; --muted: #8b98a8; --ok: #3fb68b; --warn: #e3a23b; --bad: #e5534b; --accent: #6d8cff; }
-  @media (prefers-color-scheme: light) { :root { --bg: #f5f7fa; --card: #fff; --line: #dde3ea; --text: #17202b; --muted: #5d6b7c; } }
+  @media (prefers-color-scheme: light) { :root { --bg: #f5f7fa; --card: #fff; --line: #dde3ea; --text: #17202b; --muted: #5d6b7c; --ok: #1f8a63; --warn: #a86a08; --bad: #c33a32; --accent: #3b5bdb; } }
   * { box-sizing: border-box; }
   body { margin: 0; background: var(--bg); color: var(--text); font: 14px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
-  main { max-width: 1080px; margin: 0 auto; padding: 24px 16px 48px; }
-  h1 { font-size: 22px; margin: 0 0 4px; } h2 { font-size: 15px; margin: 0 0 12px; }
+  main { max-width: 1180px; margin: 0 auto; padding: 24px 16px 48px; }
+  h1 { font-size: 22px; margin: 0 0 4px; } h2 { font-size: 15px; margin: 0 0 12px; } h3 { font-size: 13px; margin: 16px 0 6px; color: var(--muted); font-weight: 500; text-transform: uppercase; letter-spacing: .04em; }
   .muted { color: var(--muted); } .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; }
-  .grid { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); margin: 20px 0; }
-  .card { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 16px; }
+  .grid { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); margin: 20px 0; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 16px; min-width: 0; }
+  .stack > .card + .card { margin-top: 16px; }
   .big { font-size: 26px; font-weight: 600; } .dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 6px; }
   .ok { color: var(--ok); } .warn { color: var(--warn); } .bad { color: var(--bad); }
-  button { background: var(--accent); color: #fff; border: 0; border-radius: 8px; padding: 8px 14px; font: inherit; cursor: pointer; }
-  button.ghost { background: transparent; color: var(--text); border: 1px solid var(--line); }
+  button, .btn { background: var(--accent); color: #fff; border: 0; border-radius: 8px; padding: 8px 14px; font: inherit; cursor: pointer; display: inline-block; }
+  button.ghost, .btn.ghost { background: transparent; color: var(--text); border: 1px solid var(--line); }
   button:disabled { opacity: .6; cursor: default; }
-  .actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 4px; }
-  table { width: 100%; border-collapse: collapse; } th, td { text-align: left; padding: 8px 10px; border-top: 1px solid var(--line); }
-  th { color: var(--muted); font-weight: 500; font-size: 12px; text-transform: uppercase; letter-spacing: .04em; border-top: 0; }
-  tbody tr { cursor: pointer; } tbody tr:hover, tbody tr.sel { background: rgba(109, 140, 255, .08); }
-  .pill { border: 1px solid var(--line); border-radius: 999px; padding: 1px 8px; font-size: 12px; }
-  .pill.schedule { border-color: var(--accent); color: var(--accent); } .pill.worker { border-color: var(--ok); color: var(--ok); }
+  .actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 4px; }
+  .split { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); }
+  input[type=file] { display: none; }
+  table { width: 100%; border-collapse: collapse; } th, td { text-align: left; padding: 7px 10px; border-top: 1px solid var(--line); vertical-align: top; }
+  th { color: var(--muted); font-weight: 500; font-size: 12px; text-transform: uppercase; letter-spacing: .04em; border-top: 0; white-space: nowrap; }
+  td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+  tbody.click tr { cursor: pointer; } tbody.click tr:hover, tbody tr.sel { background: rgba(109, 140, 255, .08); }
+  .pill { border: 1px solid var(--line); border-radius: 999px; padding: 1px 8px; font-size: 12px; white-space: nowrap; }
+  .pill.schedule, .pill.processing, .pill.running { border-color: var(--accent); color: var(--accent); }
+  .pill.worker, .pill.done { border-color: var(--ok); color: var(--ok); }
+  .pill.failed { border-color: var(--bad); color: var(--bad); } .pill.duplicate, .pill.interrupted { border-color: var(--warn); color: var(--warn); }
   .scroll { overflow-x: auto; } #flash { min-height: 20px; margin-top: 8px; }
+  .drop { border: 1.5px dashed var(--line); border-radius: 10px; padding: 14px; margin-top: 10px; }
+  .drop.over { border-color: var(--accent); background: rgba(109, 140, 255, .06); }
+  .note { margin: 8px 0 0; padding: 8px 10px; border-radius: 8px; background: rgba(229, 83, 75, .08); }
+  .note.warn { background: rgba(227, 162, 59, .1); }
+  code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; background: rgba(127, 127, 127, .12); padding: 1px 5px; border-radius: 4px; word-break: break-all; }
 </style>
 </head>
 <body>
 <main>
   <h1>Recon demo</h1>
-  <p class="muted">Reconciles our ledger against the bank statement. Runs come from three places: the <b>scheduled job</b>, the <b>worker</b> (picking up queued recons), and the button here. Refreshes every 3 seconds.</p>
+  <p class="muted">The bank and our ledger send a statement file each day, by <b>SFTP</b> or the <b>Upload</b> button. The <b>worker</b> imports each file as it arrives,
+    checks every line and, once both sides for a day are in, reconciles that day. The <b>scheduled job</b> catches up anything not yet reconciled and says which file never came. Refreshes every 3 seconds.</p>
 
   <div class="grid">
     <div class="card"><h2>Worker</h2><div id="worker" class="big">…</div><div id="workerMeta" class="muted"></div></div>
-    <div class="card"><h2>Queue</h2><div id="queue" class="big">…</div><div class="muted">recons waiting for the worker</div></div>
+    <div class="card"><h2>Inbox</h2><div id="inbox" class="big">…</div><div id="inboxMeta" class="muted">files waiting to be imported</div></div>
+    <div class="card"><h2>Recon queue</h2><div id="queue" class="big">…</div><div class="muted">recons waiting for the worker</div></div>
     <div class="card"><h2>Last scheduled run</h2><div id="sched" class="big">…</div><div class="muted">from the scheduled job</div></div>
-    <div class="card"><h2>Payments</h2><div id="tx" class="big">…</div><div class="muted">ledger + bank lines</div></div>
+    <div class="card"><h2>Payments</h2><div id="tx" class="big">…</div><div class="muted">ledger + bank lines imported</div></div>
   </div>
 
-  <div class="card">
-    <h2>Try it</h2>
-    <div class="actions">
-      <button id="queueBtn">Queue a recon for the worker</button>
-      <button id="sampleBtn" class="ghost">Add sample payments</button>
-      <button id="runBtn" class="ghost">Run a recon here (web process)</button>
+  <div class="split">
+    <div class="card">
+      <h2>Send files</h2>
+      <div class="muted">By SFTP: put them in <code>inbox/</code> (<code id="folder">…</code>). Or here:</div>
+      <div class="drop" id="drop">
+        <div class="actions">
+          <label class="btn" for="pick">Upload files…</label><input type="file" id="pick" accept=".csv,text/csv" multiple>
+          <button id="sampleBtn" class="ghost">Drop sample files</button>
+          <span class="muted">or drag CSV files here</span>
+        </div>
+      </div>
+      <div class="muted" style="margin-top:8px">Name: <code>bank_YYYY-MM-DD….csv</code> or <code>ledger_YYYY-MM-DD….csv</code>. Columns: <code>reference,date,amount,description</code>.</div>
     </div>
-    <div id="flash" class="muted"></div>
+    <div class="card">
+      <h2>Reconcile</h2>
+      <div class="muted">The worker reconciles a day by itself once both of its files are in. To run one by hand, for the newest day:</div>
+      <div class="actions" style="margin-top:10px">
+        <button id="queueBtn">Queue a recon for the worker</button>
+        <button id="runBtn" class="ghost">Run a recon here (web process)</button>
+      </div>
+      <div id="flash" class="muted"></div>
+    </div>
   </div>
 
-  <div class="card" style="margin-top:16px">
-    <h2>Recon runs</h2>
-    <div class="scroll"><table>
-      <thead><tr><th>#</th><th>Started</th><th>Triggered by</th><th>Matched</th><th>Amounts differ</th><th>Missing</th><th>Took</th></tr></thead>
-      <tbody id="runs"><tr><td colspan="7" class="muted">No runs yet.</td></tr></tbody>
-    </table></div>
-  </div>
+  <div class="stack" style="margin-top:16px">
+    <div class="card">
+      <h2>Files</h2>
+      <div class="scroll"><table>
+        <thead><tr><th>#</th><th>File</th><th>Side</th><th>Day</th><th>Status</th><th class="num">Imported</th><th class="num">Rejected</th><th class="num">Took</th><th>Arrived</th></tr></thead>
+        <tbody id="files" class="click"><tr><td colspan="9" class="muted">No files yet.</td></tr></tbody>
+      </table></div>
+    </div>
 
-  <div class="card" style="margin-top:16px">
-    <h2 id="itemsTitle">Problems found</h2>
-    <div class="scroll"><table>
-      <thead><tr><th>Reference</th><th>Problem</th><th>Ledger</th><th>Bank</th></tr></thead>
-      <tbody id="items"><tr><td colspan="4" class="muted">Click a run to see what it found.</td></tr></tbody>
-    </table></div>
+    <div class="card" id="fileCard" hidden>
+      <h2 id="fileTitle"></h2>
+      <div id="fileMeta" class="muted"></div>
+      <div id="fileNote"></div>
+      <div id="rejectsBox"><h3 id="rejectsTitle">Lines not imported</h3>
+        <div class="scroll"><table><thead><tr><th class="num">Line</th><th>Why</th><th>The line</th></tr></thead><tbody id="rejects"></tbody></table></div></div>
+      <div id="paymentsBox"><h3 id="paymentsTitle">Payments imported</h3>
+        <div class="scroll"><table><thead><tr><th class="num">Line</th><th>Reference</th><th class="num">Amount</th><th>Description</th></tr></thead><tbody id="payments"></tbody></table></div></div>
+    </div>
+
+    <div class="card">
+      <h2>Recon runs</h2>
+      <div class="scroll"><table>
+        <thead><tr><th>#</th><th>Day</th><th>Started</th><th>By</th><th>Status</th><th class="num">Matched</th><th class="num">Amounts differ</th><th class="num">Missing</th><th class="num">Took</th></tr></thead>
+        <tbody id="runs" class="click"><tr><td colspan="9" class="muted">No runs yet.</td></tr></tbody>
+      </table></div>
+    </div>
+
+    <div class="card" id="runCard" hidden>
+      <h2 id="runTitle"></h2>
+      <div id="runMeta" class="muted"></div>
+      <div id="runNote"></div>
+      <h3>Files reconciled</h3>
+      <div id="runFiles" class="muted"></div>
+      <h3 id="problemsTitle">Problems found</h3>
+      <div class="scroll"><table><thead><tr><th>Reference</th><th>Problem</th><th class="num">Ledger</th><th class="num">Bank</th></tr></thead><tbody id="problems"></tbody></table></div>
+    </div>
   </div>
 </main>
 <script>
@@ -71,44 +120,118 @@ const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 const ago = (t) => { if (!t) return 'never'; const s = Math.max(0, Math.round((Date.now() - Date.parse(t)) / 1000)); return s < 60 ? `${s}s ago` : s < 3600 ? `${Math.round(s / 60)} min ago` : `${Math.round(s / 3600)}h ago`; };
 const when = (t) => (t ? new Date(t).toLocaleString(undefined, { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', second: '2-digit' }) : '—');
+const day = (d) => (d ? new Date(d + 'T00:00:00').toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' }) : '—');
+const took = (a, b, still) => (b ? `${((Date.parse(b) - Date.parse(a)) / 1000).toFixed(1)}s` : still ? '…' : '—');
+const size = (n) => (n == null ? '' : n < 1024 ? `${n} B` : n < 1048576 ? `${(n / 1024).toFixed(1)} KB` : `${(n / 1048576).toFixed(1)} MB`);
+const pill = (s, text) => `<span class="pill ${esc(s)}">${esc(text ?? s)}</span>`;
 const PROBLEM = { amount_differs: 'Amount differs', missing_in_bank: 'Missing at the bank', missing_in_ledger: 'Missing in the ledger' };
-let selected = null;
+const FILE_STATUS = { processing: 'importing…', done: 'imported', failed: 'failed', duplicate: 'duplicate', interrupted: 'interrupted' };
+let sel = { file: null, run: null }, seen = {};
 
-async function refresh() {
-  try {
-    const r = await (await fetch('/api/status')).json();
-    const w = r.worker;
-    $('worker').innerHTML = `<span class="dot" style="background:var(--${w.alive ? 'ok' : 'bad'})"></span><span class="${w.alive ? 'ok' : 'bad'}">${w.alive ? 'Running' : 'Not running'}</span>`;
-    $('workerMeta').textContent = w.lastBeat ? `last heartbeat ${ago(w.lastBeat)} · ${w.processed} recons handled${w.pid ? ` · pid ${w.pid}` : ''}` : 'no heartbeat yet: is the worker added?';
-    $('queue').innerHTML = `${r.queue.queued}${r.queue.running ? ` <span class="muted" style="font-size:14px">(+${r.queue.running} running)</span>` : ''}`;
-    $('sched').textContent = r.lastScheduled ? ago(r.lastScheduled) : 'none yet';
-    $('tx').textContent = r.transactions;
-    $('runs').innerHTML = r.runs.length ? r.runs.map((x) => {
-      const took = x.finishedAt ? `${((Date.parse(x.finishedAt) - Date.parse(x.startedAt)) / 1000).toFixed(1)}s` : 'running…';
-      return `<tr data-id="${x.id}" class="${x.id === selected ? 'sel' : ''}"><td>${x.id}</td><td>${esc(when(x.startedAt))}</td><td><span class="pill ${esc(x.trigger)}">${esc(x.trigger)}</span></td>
-        <td class="ok">${x.matched}</td><td class="${x.mismatched ? 'warn' : ''}">${x.mismatched}</td><td class="${x.missing ? 'bad' : ''}">${x.missing}</td><td>${took}</td></tr>`;
-    }).join('') : '<tr><td colspan="7" class="muted">No runs yet: queue one, or wait for the schedule.</td></tr>';
-    for (const tr of document.querySelectorAll('#runs tr[data-id]')) tr.onclick = () => show(Number(tr.dataset.id));
-  } catch { $('flash').textContent = 'Could not reach the app.'; }
+async function getJSON(url, opts) {
+  const res = await fetch(url, opts);
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(body.detail || `HTTP ${res.status}`);
+  return body;
 }
 
-async function show(id) {
-  selected = id;
-  const items = await (await fetch(`/api/runs/${id}`)).json();
-  $('itemsTitle').textContent = `Problems found by run #${id}`;
-  $('items').innerHTML = items.length ? items.map((i) => `<tr><td class="mono">${esc(i.reference)}</td><td>${PROBLEM[i.problem] ?? esc(i.problem)}</td><td>${esc(i.ledger ?? '—')}</td><td>${esc(i.bank ?? '—')}</td></tr>`).join('')
-    : '<tr><td colspan="4" class="muted">Everything matched.</td></tr>';
+async function refresh() {
+  let r;
+  try { r = await getJSON('/api/status'); } catch { $('flash').textContent = 'Could not reach the app.'; return; }
+  const w = r.worker;
+  $('worker').innerHTML = `<span class="dot" style="background:var(--${w.alive ? 'ok' : 'bad'})"></span><span class="${w.alive ? 'ok' : 'bad'}">${w.alive ? 'Running' : 'Not running'}</span>`;
+  $('workerMeta').textContent = w.lastBeat ? `last heartbeat ${ago(w.lastBeat)} · ${w.processed} files & recons handled${w.pid ? ` · pid ${w.pid}` : ''}` : 'no heartbeat yet: is the worker added?';
+  $('inbox').textContent = r.inbox.length;
+  $('inboxMeta').textContent = r.processing.length ? `importing ${r.processing.map((f) => f.name).join(', ')}`
+    : r.inbox.length ? `waiting: ${r.inbox.slice(0, 3).map((f) => f.name).join(', ')}${r.inbox.length > 3 ? '…' : ''}` : 'files waiting to be imported';
+  $('queue').innerHTML = `${r.queue.queued}${r.queue.running ? ` <span class="muted" style="font-size:14px">(+${r.queue.running} running)</span>` : ''}`;
+  $('sched').textContent = r.lastScheduled ? ago(r.lastScheduled) : 'none yet';
+  $('tx').textContent = r.payments.toLocaleString();
+  $('folder').textContent = r.folder;
+
+  $('files').innerHTML = r.files.length ? r.files.map((f) => `<tr data-id="${f.id}" class="${f.id === sel.file ? 'sel' : ''}">
+      <td>${f.id}</td><td class="mono">${esc(f.name)}<div class="muted">${size(f.size)}</div></td><td>${esc(f.source ?? '—')}</td><td>${day(f.statementDate)}</td>
+      <td>${pill(f.status, FILE_STATUS[f.status])}</td><td class="num ok">${f.status === 'processing' ? '…' : f.rowsOk}</td>
+      <td class="num ${f.rowsRejected ? 'warn' : ''}">${f.status === 'processing' ? '…' : f.rowsRejected}</td>
+      <td class="num">${took(f.startedAt, f.finishedAt, f.status === 'processing')}</td><td>${esc(when(f.receivedAt))}</td></tr>`).join('')
+    : '<tr><td colspan="9" class="muted">No files yet: upload some, drop the samples, or send them by SFTP.</td></tr>';
+  for (const tr of document.querySelectorAll('#files tr[data-id]')) tr.onclick = () => showFile(Number(tr.dataset.id));
+
+  $('runs').innerHTML = r.runs.length ? r.runs.map((x) => `<tr data-id="${x.id}" class="${x.id === sel.run ? 'sel' : ''}">
+      <td>${x.id}</td><td>${day(x.statementDate)}</td><td>${esc(when(x.startedAt))}</td><td>${pill(x.trigger)}</td>
+      <td>${pill(x.status)}${x.note ? `<div class="warn" style="font-size:12px">${esc(x.note)}</div>` : ''}</td>
+      <td class="num ok">${x.matched}</td><td class="num ${x.mismatched ? 'warn' : ''}">${x.mismatched}</td><td class="num ${x.missing ? 'bad' : ''}">${x.missing}</td>
+      <td class="num">${took(x.startedAt, x.finishedAt, x.status === 'running')}</td></tr>`).join('')
+    : '<tr><td colspan="9" class="muted">No runs yet: they start once both files for a day are in.</td></tr>';
+  for (const tr of document.querySelectorAll('#runs tr[data-id]')) tr.onclick = () => showRun(Number(tr.dataset.id));
+
+  // keep an open detail up to date while what it shows is still changing
+  const f = r.files.find((x) => x.id === sel.file), x = r.runs.find((y) => y.id === sel.run);
+  if (f && seen.file !== f.status) showFile(f.id, false);
+  if (x && seen.run !== x.status) showRun(x.id, false);
+}
+
+function note(el, text, cls = '') { el.innerHTML = text ? `<div class="note ${cls}">${esc(text)}</div>` : ''; }
+
+async function showFile(id, scroll = true) {
+  sel.file = id;
+  const d = await getJSON(`/api/files/${id}`), f = d.file;
+  seen.file = f.status;
+  $('fileCard').hidden = false;
+  $('fileTitle').innerHTML = `File #${f.id}: <span class="mono">${esc(f.name)}</span> ${pill(f.status, FILE_STATUS[f.status])}`;
+  $('fileMeta').textContent = [f.source && `${f.source} side`, f.statementDate && `statement for ${day(f.statementDate)}`, size(f.size),
+    `arrived ${when(f.receivedAt)}`, f.status !== 'processing' && `${f.rowsTotal} lines: ${f.rowsOk} imported, ${f.rowsRejected} rejected`,
+    f.storedAs && `kept as ${f.storedAs}`].filter(Boolean).join(' · ');
+  note($('fileNote'), f.error, f.status === 'duplicate' || f.status === 'interrupted' ? 'warn' : '');
+  $('rejectsBox').hidden = !d.rejects.length;
+  $('rejectsTitle').textContent = `Lines not imported (${f.rowsRejected})${d.rejects.length < f.rowsRejected ? `: the first ${d.rejects.length}` : ''}`;
+  $('rejects').innerHTML = d.rejects.map((x) => `<tr><td class="num">${x.line}</td><td class="warn">${esc(x.reason)}</td><td class="mono">${esc(x.raw)}</td></tr>`).join('');
+  $('paymentsBox').hidden = !d.payments.length;
+  $('paymentsTitle').textContent = `Payments imported (${f.rowsOk.toLocaleString()})${d.payments.length < f.rowsOk ? `: the first ${d.payments.length}` : ''}`;
+  $('payments').innerHTML = d.payments.map((p) => `<tr><td class="num">${p.line}</td><td class="mono">${esc(p.reference)}</td><td class="num">${esc(p.amount)}</td><td>${esc(p.description ?? '')}</td></tr>`).join('');
+  if (scroll) $('fileCard').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  for (const tr of document.querySelectorAll('#files tr[data-id]')) tr.classList.toggle('sel', Number(tr.dataset.id) === id);
+}
+
+async function showRun(id, scroll = true) {
+  sel.run = id;
+  const d = await getJSON(`/api/runs/${id}`), x = d.run;
+  seen.run = x.status;
+  $('runCard').hidden = false;
+  $('runTitle').innerHTML = `Recon #${x.id} of ${day(x.statementDate)} ${pill(x.trigger)} ${pill(x.status)}`;
+  $('runMeta').textContent = `started ${when(x.startedAt)} on ${x.host ?? '?'} · ${x.total} references: ${x.matched} matched, ${x.mismatched} amounts differ, ${x.missing} missing`;
+  note($('runNote'), x.error || x.note, x.error ? '' : 'warn');
+  $('runFiles').innerHTML = d.files.length ? d.files.map((f) => `<a href="#" data-file="${f.id}" class="mono">#${f.id} ${esc(f.name)}</a> <span class="muted">(${f.source}, ${f.rowsOk})</span>`).join(' · ') : 'none';
+  for (const a of document.querySelectorAll('#runFiles a[data-file]')) a.onclick = (e) => { e.preventDefault(); showFile(Number(a.dataset.file)); };
+  $('problemsTitle').textContent = `Problems found (${d.problemCount})${d.problems.length < d.problemCount ? `: the first ${d.problems.length}` : ''}`;
+  $('problems').innerHTML = d.problems.length ? d.problems.map((i) => `<tr><td class="mono">${esc(i.reference)}</td><td>${PROBLEM[i.problem] ?? esc(i.problem)}</td><td class="num">${esc(i.ledger ?? '—')}</td><td class="num">${esc(i.bank ?? '—')}</td></tr>`).join('')
+    : `<tr><td colspan="4" class="muted">${x.status === 'done' ? 'Everything matched.' : 'Nothing yet.'}</td></tr>`;
+  if (scroll) $('runCard').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  for (const tr of document.querySelectorAll('#runs tr[data-id]')) tr.classList.toggle('sel', Number(tr.dataset.id) === id);
+}
+
+async function act(btn, url, done, opts = { method: 'POST' }) {
+  if (btn) btn.disabled = true;
+  try { $('flash').textContent = done(await getJSON(url, opts)); } catch (e) { $('flash').textContent = e.message || 'That did not work.'; }
+  if (btn) btn.disabled = false;
   refresh();
 }
 
-async function act(btn, url, done) {
-  btn.disabled = true;
-  try { const r = await (await fetch(url, { method: 'POST' })).json(); $('flash').textContent = done(r); } catch { $('flash').textContent = 'That did not work.'; }
-  btn.disabled = false; refresh();
+function uploadFiles(list) {
+  if (!list.length) return;
+  const body = new FormData();
+  for (const f of list) body.append('files', f);
+  $('flash').textContent = `Uploading ${list.length} file(s)…`;
+  act(null, '/api/upload', (r) => `In the inbox: ${r.saved.join(', ')}. The worker imports them within a few seconds.${r.errors.length ? ' Not uploaded: ' + r.errors.join(' ') : ''}`, { method: 'POST', body });
 }
-$('queueBtn').onclick = (e) => act(e.target, '/api/queue', (r) => `Queued #${r.queued}: the worker picks it up within 5 seconds (if it's running).`);
-$('sampleBtn').onclick = (e) => act(e.target, '/api/sample', (r) => `Added ${r.added} payments.`);
-$('runBtn').onclick = (e) => act(e.target, '/api/run-now', (r) => `Run #${r.run} done in the web process.`);
+$('pick').onchange = (e) => { uploadFiles([...e.target.files]); e.target.value = ''; };
+const drop = $('drop');
+drop.ondragover = (e) => { e.preventDefault(); drop.classList.add('over'); };
+drop.ondragleave = () => drop.classList.remove('over');
+drop.ondrop = (e) => { e.preventDefault(); drop.classList.remove('over'); uploadFiles([...e.dataTransfer.files]); };
+$('sampleBtn').onclick = (e) => act(e.target, '/api/samples', (r) => `In the inbox: ${r.saved.join(', ')}.`);
+$('queueBtn').onclick = (e) => act(e.target, '/api/queue', (r) => `Queued #${r.queued} for ${day(r.date)}: the worker picks it up within 5 seconds (if it's running).`);
+$('runBtn').onclick = (e) => act(e.target, '/api/run-now', (r) => `Run #${r.run} of ${day(r.date)} done in the web process.`);
 refresh(); setInterval(refresh, 3000);
 </script>
 </body>
