@@ -3,3 +3,4 @@ uvicorn[standard]==0.32.1
 sqlalchemy==2.0.36
 pymysql==1.1.1
 python-multipart==0.0.20
+redis==5.2.1

@@ -51,6 +51,7 @@
     <div class="card"><h2>Recon queue</h2><div id="queue" class="big">…</div><div class="muted">recons waiting for the worker</div></div>
     <div class="card"><h2>Last scheduled run</h2><div id="sched" class="big">…</div><div class="muted">from the scheduled job</div></div>
     <div class="card"><h2>Payments</h2><div id="tx" class="big">…</div><div class="muted">ledger + bank lines imported</div></div>
+    <div class="card"><h2>Redis queue</h2><div id="redis" class="big">…</div><div id="redisMeta" class="muted"></div></div>
   </div>
 
   <div class="split">
@@ -72,6 +73,7 @@
       <div class="actions" style="margin-top:10px">
         <button id="queueBtn">Queue a recon for the worker</button>
         <button id="runBtn" class="ghost">Run a recon here (web process)</button>
+        <button id="redisBtn" class="ghost">Queue a recon on Redis</button>
       </div>
       <div id="flash" class="muted"></div>
     </div>
@@ -147,6 +149,15 @@ async function refresh() {
   $('queue').innerHTML = `${r.queue.queued}${r.queue.running ? ` <span class="muted" style="font-size:14px">(+${r.queue.running} running)</span>` : ''}`;
   $('sched').textContent = r.lastScheduled ? ago(r.lastScheduled) : 'none yet';
   $('tx').textContent = r.payments.toLocaleString();
+  const q = r.redis || {};
+  if (!q.configured) { $('redis').innerHTML = '<span class="muted">Not set up</span>'; $('redisMeta').textContent = 'set the app\'s Redis (REDIS_URL) on the Ops Console, then add the Redis worker'; }
+  else if (q.error) { $('redis').innerHTML = '<span class="bad">Can\'t reach it</span>'; $('redisMeta').textContent = `${q.where}: ${q.error}`; }
+  else {
+    $('redis').innerHTML = `${q.redis_queued}${q.redis_running ? ` <span class="muted" style="font-size:14px">(+${q.redis_running} running)</span>` : ''}`;
+    const last = (q.recent || [])[0];
+    $('redisMeta').innerHTML = `<span class="dot" style="background:var(--${q.workerAlive ? 'ok' : 'bad'})"></span>${q.workerAlive ? 'Redis worker running' : 'Redis worker not running'} · ${q.redis_done} done, ${q.redis_failed} failed`
+      + (last ? ` · last: ${last.date ?? '?'} ${last.status}` : '') + `<br>${q.where}`;
+  }
   $('folder').textContent = r.folder;
 
   $('files').innerHTML = r.files.length ? r.files.map((f) => `<tr data-id="${f.id}" class="${f.id === sel.file ? 'sel' : ''}">
@@ -231,6 +242,7 @@ drop.ondragleave = () => drop.classList.remove('over');
 drop.ondrop = (e) => { e.preventDefault(); drop.classList.remove('over'); uploadFiles([...e.dataTransfer.files]); };
 $('sampleBtn').onclick = (e) => act(e.target, '/api/samples', (r) => `In the inbox: ${r.saved.join(', ')}.`);
 $('queueBtn').onclick = (e) => act(e.target, '/api/queue', (r) => `Queued #${r.queued} for ${day(r.date)}: the worker picks it up within 5 seconds (if it's running).`);
+$('redisBtn').onclick = (e) => act(e.target, '/api/redis/queue', (r) => `On the Redis queue (${r.queued}) for ${day(r.date)}: the Redis worker picks it up straight away (if it's running).`);
 $('runBtn').onclick = (e) => act(e.target, '/api/run-now', (r) => `Run #${r.run} of ${day(r.date)} done in the web process.`);
 refresh(); setInterval(refresh, 3000);
 </script>
