@@ -15,7 +15,9 @@ duplicate) and, for a file you click, **its records**: the payments it brought i
 with why. Then every recon run (matched / amounts that differ / missing on one side) and, for a run you click, the
 files it used and what it found. It refreshes every 3 seconds.
 
-FastAPI and SQLAlchemy. The queue lives in the app's own database, so no Redis is needed.
+FastAPI and SQLAlchemy. The main queue lives in the app's own database, so no Redis is needed. For trying a Redis
+queue (Valkey on the server, or an external Redis such as Upstash) there is a second, optional one: see
+[Try it with Redis](#6-optional-try-it-with-redis-valkey-or-upstash).
 
 ## How a file goes through
 
@@ -105,6 +107,45 @@ Any worker or job can report this way: print a line starting with `ops-metric ` 
 one: `processed` / `total` as a progress bar, `label` as its title, other numbers or short texts as figures. See
 `metric()` in `app/recon.py`.
 
+### 6. (Optional) Try it with Redis: Valkey or Upstash
+A second queue, in Redis, next to the database one: the same recon, handed over through Redis instead.
+
+1. On the **Workers & jobs** tab, under **Redis**, choose **Valkey on this server** or **External Redis** and paste the
+   address (Upstash: the `rediss://default:…@….upstash.io:6379` one). The console saves it as `REDIS_URL` and restarts
+   the app and its workers.
+2. **Add** the Redis worker:
+
+   | Field | Value |
+   |---|---|
+   | Name | `redis-worker` |
+   | Type | Worker |
+   | Command | `python -m app.redis_worker` |
+
+3. **Add** the scheduled job that queues on Redis:
+
+   | Field | Value |
+   |---|---|
+   | Name | `redis-recon` |
+   | Type | Scheduled job |
+   | Command | `python -m app.jobs.redis_recon` |
+   | Runs | Custom (cron) `*/15 * * * *` |
+
+4. On the page, the **Redis queue** card shows what's waiting, whether the Redis worker is up, how many it has done or
+   failed, and which Redis (without its password). **Queue a recon on Redis** puts the newest day on it; the Redis
+   worker picks it up straight away and its run shows in the runs list as **redis**.
+
+How it works (`app/redisq.py`): the page and the job push onto the `recon-demo:queue` list; the worker takes the next
+one and moves it to `recon-demo:processing` in the same command, so a worker stopped or killed part-way leaves it
+there and puts it back on its next start. Results are counted (`recon-demo:count:done` / `:failed`) and the last 20
+kept (`recon-demo:recent`). Things to try: stop the Redis worker, queue a few, start it again; set a wrong address
+and see the worker say it can't reach Redis (and the Ops Console count it as a problem in its logs).
+
+Upstash's free plan counts every command, so the worker waits on the queue with one blocking command of up to 20
+seconds (`REDIS_BLOCK_SECONDS`) instead of checking it every few seconds, beats about once a minute, reports its
+figures every 5 minutes while idle, and the page's Redis figures are cached for 5 seconds: about 7,000 commands a day
+while idle, plus about 4 a refresh while the page is open (check your plan's limit). `REDIS_PREFIX` (default `recon-demo`) names the keys, if two apps
+share one Redis.
+
 ## The demo
 
 `samples/` holds the files for it, and [samples/README.md](samples/README.md) a 10-minute script: a clean pair, a file
@@ -126,7 +167,7 @@ Without `DATABASE_URL` it uses `./recon.db` (SQLite). With the Ops Console, `DAT
 settings (`sqlite:///…`, `mysql+pymysql://…` or `postgresql://…`). `ROW_DELAY_MS` (default 3) slows each line a little
 so progress can be watched; set it to 0 for full speed.
 
-Tests: `pip install pytest httpx && pytest`.
+Tests: `pip install pytest httpx fakeredis && pytest`.
 
 Upgrading from the version that generated random payments: the tables have new names, so nothing needs migrating.
 The old tables (`transactions`, `tasks`, `recon_runs`, `recon_items`) are no longer used and can be dropped.
@@ -135,13 +176,14 @@ The old tables (`transactions`, `tasks`, `recon_runs`, `recon_items`) are no lon
 
 | Path | What |
 |---|---|
-| `app/main.py` | the web app: the page, `/api/status`, `/api/files/{id}`, `/api/runs/{id}`, `/api/upload`, `/api/samples`, `/api/queue`, `/api/run-now`, `/health` |
+| `app/main.py` | the web app: the page, `/api/status`, `/api/files/{id}`, `/api/runs/{id}`, `/api/upload`, `/api/samples`, `/api/queue`, `/api/redis/queue`, `/api/run-now`, `/health` |
 | `app/worker.py` | the worker: heartbeat, the inbox, the recon queue, recovery on start |
 | `app/files.py` | the folders, taking a file from the inbox, importing and checking it |
 | `app/recon.py` | the reconciliation of a day |
 | `app/jobs/recon.py` | the scheduled job |
+| `app/redisq.py`, `app/redis_worker.py`, `app/jobs/redis_recon.py` | the optional Redis queue, its worker and its scheduled job |
 | `app/samples.py` | sample files (`python -m app.samples samples/` rewrites `samples/`) |
 | `app/db.py` | the tables (files, rejected lines, payments, queue, runs, problems, heartbeat) |
 | `app/static/index.html` | the page |
 | `scripts/setup-sftp.sh` | the server's SFTP drop box |
-| `tests/` | the whole path of a file, from the inbox to the recon |
+| `tests/` | the whole path of a file, from the inbox to the recon; the Redis queue (with a fake Redis) |

@@ -9,6 +9,7 @@ from fastapi import FastAPI, File, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse, Response
 from sqlalchemy import func
 
+from . import redisq
 from .db import Heartbeat, ImportFile, ImportReject, Payment, ReconItem, ReconRun, Session, Task, init, now, utc
 from .files import FILES_DIR, ensure_dirs, save_upload, waiting
 from .recon import interrupt_stale, latest_date, run
@@ -76,6 +77,7 @@ def status():
             "processing": [file_json(f) for f in s.query(ImportFile).filter(ImportFile.status == "processing")],
             "files": [file_json(f) for f in s.query(ImportFile).order_by(ImportFile.id.desc()).limit(30)],
             "runs": [run_json(r) for r in s.query(ReconRun).order_by(ReconRun.id.desc()).limit(25)],
+            "redis": redisq.status(),
         }
 
 
@@ -149,6 +151,20 @@ def queue(date: str | None = None):
         s.add(t)
         s.commit()
         return {"queued": t.id, "date": iso(day)}
+
+
+@app.post("/api/redis/queue")
+def redis_queue(date: str | None = None):
+    """A recon of a day (default: the newest) on the Redis queue, for the Redis worker (app.redis_worker)."""
+    day = _day(date)
+    r = redisq.client()
+    if r is None:
+        raise HTTPException(409, "REDIS_URL isn't set: set the app's Redis on the Ops Console's Workers & jobs tab first.")
+    try:
+        task_id = redisq.enqueue(r, day, "queued from the page")
+    except Exception as e:  # noqa: BLE001: Redis unreachable or refusing
+        raise HTTPException(502, f"Couldn't reach Redis: {type(e).__name__}: {e}"[:300])
+    return {"queued": task_id, "date": iso(day)}
 
 
 @app.post("/api/run-now")
